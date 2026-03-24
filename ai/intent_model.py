@@ -195,11 +195,3 @@ def recognize_intent(message: str, session: dict) -> dict:
             "type": "error",
             "message": str(e)
         }
-
-
-def create_session() -> dict:
-    return {
-        "intent": None,
-        "class": None,
-        "data": {}
-    }
