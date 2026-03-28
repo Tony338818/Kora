@@ -65,6 +65,8 @@ void_transaction     → Void a transaction
 
 STRICT RULES:
 
+- If an intent is already set in the SESSION STATE, do not change it unless the user explicitly switches topics.
+- Merge new data into the existing session data.
 - NEVER guess or invent values — only extract what the user explicitly stated
 - NEVER ask for optional fields (supplier, img_url, description, buy_date, expiry_date)
 - Use session state to fill gaps from previous messages
@@ -107,23 +109,18 @@ Sales:
 
 RESPONSE FORMAT — return only valid JSON, no extra text:
 
-1. All required fields present:
+1. Intent clear
 {{
-  "type": "final",
   "class": "Inventory | Sales",
   "intent": "<intent_name>",
   "data": {{ <extracted fields only> }},
   "confidence": <0.0 – 1.0>
 }}
 
-2. Intent clear but required fields missing:
+2. General Conversation
 {{
-  "type": "clarification",
-  "class": "Inventory | Sales",
-  "intent": "<intent_name>",
-  "message": "<one natural, concise question to the user>",
-  "missing_fields": ["field1", "field2"],
-  "data": {{ <whatever was already extracted> }}
+  "type": "chat",
+  "message": "<your reply>"
 }}
 
 3. Intent unclear:
@@ -139,11 +136,9 @@ EXAMPLES:
 User: "I sell basmati rice, I buy at $5 and sell at $5.40"
 →
 {{
-  "type": "clarification",
   "class": "Inventory",
   "intent": "add_product",
   "message": "How many units of basmati rice do you currently have in stock?",
-  "missing_fields": ["quantity"],
   "data": {{ "name": "basmati rice", "cost_price": 5.0, "selling_price": 5.4 }}
 }}
 
@@ -153,7 +148,6 @@ User: "I have 200 bags"
 (session already has name, cost_price, selling_price)
 →
 {{
-  "type": "final",
   "class": "Inventory",
   "intent": "add_product",
   "data": {{
@@ -173,18 +167,50 @@ User input:
 Output:
 """
 
-
-def recognize_intent(message: str, session: dict) -> dict:
+# LLM model router
+def model_router(message: str, session: dict):
     try:
-        prompt = build_prompt(message, session)
-
+        prompt = f"""Classify this WhatsApp message into ONE intent.
+        Message: "{message}"
+        
+        Examples:
+        - "hey how are you" → casual_conversation
+        - "how many red shirts do we have" → inventory_query + product_name="red shirts"
+        - "what's the price" → inventory_query
+        - "order 3 apples" → other (we'll handle later)
+        """
+        
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-3-flash-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.2,
-                system_instruction="You are an AI assistant for a retail management system."
+                system_instruction=prompt
+            )
+        )
+
+        return json.loads(response.text)
+    except Exception as e:
+        return {
+            'error': str(e)
+        }
+
+
+
+def recognize_intent(message: str, session: dict) -> dict:
+    try:
+        base_instructions = "You are an AI assistant for a retail management system."
+        dynamic_system_prompt = f"{base_instructions}\n\nCURRENT SESSION STATE:\n{session}"
+        prompt = build_prompt(message, session)
+
+        response = client.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.2,
+                system_instruction=dynamic_system_prompt
             )
         )
 
@@ -195,3 +221,5 @@ def recognize_intent(message: str, session: dict) -> dict:
             "type": "error",
             "message": str(e)
         }
+        
+        

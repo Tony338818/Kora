@@ -54,29 +54,31 @@ async def webhook(
     ProfileName: str = Form(default=None)
 ):
     
-    print("🔥 WEBHOOK HIT")
+    print("WEBHOOK HIT")
     print(f"Message: {Body}")
     print(f"From: {From}")
     user_id = From
     message = Body
 
-    # 🔥 Call orchestrator
+    # Call orchestrator
     result = process_message(user_id, message)
+    
+    send_message(result, user_id)
 
-    # ── HANDLE RESPONSE ─────────────────────────
+    # # ── HANDLE RESPONSE ─────────────────────────
 
-    if result["status"] == "clarification":
-        send_message(result["message"], user_id)
-        return {"status": "ok"}
+    # if result["status"] == "clarification":
+    #     send_message(result["message"], user_id)
+    #     return {"status": "ok"}
 
-    if result["status"] == "unknown":
-        send_message(result["message"], user_id)
-        return {"status": "ok"}
+    # if result["status"] == "unknown":
+    #     send_message(result["message"], user_id)
+    #     return {"status": "ok"}
 
-    if result["status"] == "ready":
-        response_text = _handle_business_logic(result)
-        send_message(response_text, user_id)
-        return {"status": "ok"}
+    # if result["status"] == "ready":
+    #     response_text = _handle_business_logic(result)
+    #     send_message(response_text, user_id)
+    #     return {"status": "ok"}
 
     return {"status": "error"}
 
