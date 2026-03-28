@@ -10,8 +10,10 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Chatbot Prompt
 def build_chat_prompt(message: str, session: dict | None = None) -> str:
-    session_data = session.get("data", {}) if session else {}
-    session_intent = session.get("intent") if session else None
+    task           = (session.get("task") or {}) if session else {}
+    session_data   = task.get("collected_data", {})
+    session_intent = task.get("intent")
+    mode           = session.get("mode") if session else None
 
     return f"""
 You are a CONTROLLED retail assistant.
@@ -111,7 +113,7 @@ def chatbot(message: str, session: dict) -> str:
         prompt = build_chat_prompt(message, session)
         
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
+            model="gemini-3-flash-preview",
             contents=prompt,
             config=types.GenerateContentConfig(
                 # Using system_instruction for the "rules" keeps the logic stable
@@ -125,5 +127,5 @@ def chatbot(message: str, session: dict) -> str:
         return result.get("message")
 
     except Exception as e:
-        print(f"Error: {e}") # Useful for debugging
+        print(f"Error: {e}")
         return "Hi! How can I help you today?"

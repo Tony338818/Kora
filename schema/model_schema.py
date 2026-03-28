@@ -3,7 +3,8 @@ from pydantic import BaseModel, Field
 
 class ConversationClass(str, Enum):
     CASUAL_CONVERSATION = "casual_conversation"
-    INVENTORY_QUERY = "inventory_query"
+    INVENTORY_CONVERSATION = "inventory_conversation"
+    SALES_CONVERSATION = "sales_conversation"
     OTHER = "other"
 
 class RouterOutput(BaseModel):

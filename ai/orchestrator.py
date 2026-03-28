@@ -1,111 +1,12 @@
-from ai.intent_model import recognize_intent
 from ai.validator import validator
-from dependency.session import get_session, update_session, append_history
-from ai.model_router import model_router
+from dependency.session import get_session, update_session, append_history, clear_task
 from ai.chatbot import chatbot
 from ai.inventory_bot import inventorybot
+from ai.sales_bot import salesbot
+from ai.semantic_router import SemanticRouter
 
 
-# def process_message(user_id: str, message: str) -> dict:
-    # """
-    # Full pipeline:
-    # 1. Load session
-    # 2. Call LLM with session data
-    # 3. Handle clarification / final / unknown
-    # """
-
-    # # Load session
-    # session = get_session(user_id)
-    # session_data = session.get("data", {})
-
-    # # Call LLM
-    # llm_result = recognize_intent(message, session_data)
-    # response_type = llm_result.get("type")
-
-    # # ── UNKNOWN / ERROR ─────────────────────────────
-    # if response_type in ("unknown", "error"):
-    #     return {
-    #         "status": "unknown",
-    #         "message": llm_result.get("message", "I didn't understand that.")
-    #     }
-
-    # # ── CLARIFICATION ───────────────────────────────
-    # if response_type == "clarification":
-    #     update_session(user_id, {
-    #         "intent": llm_result.get("intent"),
-    #         "class": llm_result.get("class"),
-    #         "data": llm_result.get("data", {})
-    #     })
-
-    #     return {
-    #         "status": "clarification",
-    #         "message": llm_result.get("message"),
-    #         "missing_fields": llm_result.get("missing_fields", [])
-    #     }
-
-    # # ── FINAL → VALIDATE ────────────────────────────
-    # if response_type == "final":
-    #     msg_class = llm_result.get("class")
-    #     intent = llm_result.get("intent")
-    #     data = llm_result.get("data", {})
-
-    #     validation = validator(msg_class, intent, data)
-
-    #     # VALID → CALL API
-    #     if validation["valid"]:
-    #         clear_session(user_id)
-
-    #         return {
-    #             "status": "ready",
-    #             "action": "call_api",
-    #             "class": msg_class,
-    #             "intent": intent,
-    #             "data": data
-    #         }
-
-    #     # INVALID → ASK AGAIN
-    #     else:
-    #         update_session(user_id, {
-    #             "intent": intent,
-    #             "class": msg_class,
-    #             "data": data
-    #         })
-
-    #         missing_fields = [e["field"] for e in validation["errors"]]
-
-    #         return {
-    #             "status": "clarification",
-    #             "message": _fields_to_question(missing_fields),
-    #             "missing_fields": missing_fields
-    #         }
-
-    # return {
-    #     "status": "error",
-    #     "message": "Unexpected response from model."
-    # }
-
-
-# ── HELPER ───────────────────────────────────────
-
-def _fields_to_question(missing_fields: list[str]) -> str:
-    readable = {
-        "name": "the product name",
-        "quantity": "the quantity",
-        "cost_price": "the cost price",
-        "selling_price": "the selling price",
-        "available": "whether the product is available (yes/no)",
-        "transaction_id": "the transaction ID",
-        "items": "the items (name + quantity) for the sale",
-    }
-
-    labels = [readable.get(f, f) for f in missing_fields]
-
-    if len(labels) == 1:
-        return f"Could you provide {labels[0]}?"
-
-    return f"Could you provide {', '.join(labels[:-1])} and {labels[-1]}?"
-
-
+router = SemanticRouter()
 def process_message(user_id: str, message: str):
     """
     1) Get user the message and Load session
@@ -122,91 +23,167 @@ def process_message(user_id: str, message: str):
     session_intent = session.get('intent')
     session_data = session.get("data", {})
     
-    # classify    
-    route = model_router(message=message, session=session)
+    # classify
+    route = router.route(user_query=message, session=session)
 
     # routing
-    convo_class = route.get('conversation_class')
+    convo_class = route.get('best_route')
     if convo_class == 'casual_conversation':
         response = chatbot(message, session)
-        
+
         update_session(
             user_id=user_id,
             updates={
                 "mode": "chat",
-                "last_intent": "casual_conversation",
+                "last_intent": convo_class,
                 "last_message": message,
-                # add the bots response as well
                 "task": None
             }
         )
 
         append_history(user_id, {
-            "type": "chat",
-            "message": message
+            "type": convo_class,
+            "message": message,
+            "bot_response": response,
         })
-        return response
-    elif convo_class == 'inventory_query':
+        return response    
+    elif convo_class == 'inventory_conversation':
+
         response = inventorybot(message=message, session=session)
         
-        # update_session(
-        #     user_id=user_id,
-        #     updates= {
-        #         "mode": 'task'
-        #     }
-        # )
-        return response
-    # elif convo_class == 'inventory_query':
-    #     extraction = inventorybot(message=message, session=session)
+        if response.get('error'):
+            response = 'LLM down'
+            return response
 
-    #     if "intent" not in extraction or "data" not in extraction:
-    #         return chatbot(message, session)
+        intent = response.get('intent')
+        data = response.get('data') or {}
 
-    #     intent = extraction.get("intent")
-    #     data = extraction.get("data", {})
+        task = session.get("task") or {}
 
-    #     # # If model fails → fallback to chat
-    #     # if intent is None:
-    #     #     return chatbot(message, session)
+        existing_data = task.get("collected_data", {})
+        existing_intent = task.get("intent")
 
-    #     # current_task = session.get("task") or {
-    #     #     "intent": None,
-    #     #     "data": {},
-    #     #     "status": "idle"
-    #     # }
+        # preserve intent
+        if existing_intent:
+            intent = existing_intent
 
-    #     # # 🔥 TASK STATE MANAGEMENT
+        # merge data
+        merged_data = {**existing_data, **data}
 
-    #     # # 1. Start new task
-    #     # if current_task["intent"] is None:
-    #     #     current_task["intent"] = intent
-    #     #     current_task["status"] = "in_progress"
+        # validate merged data
+        valid = validator(
+            msg_class=convo_class,
+            intent=intent,
+            data=merged_data
+        )
 
-    #     # # 2. User switched intent → reset task
-    #     # elif current_task["intent"] != intent:
-    #     #     current_task = {
-    #     #         "intent": intent,
-    #     #         "data": {},
-    #     #         "status": "in_progress"
-    #     #     }
+        # update session
+        update_session(
+            user_id=user_id,
+            updates={
+                "mode": "task",
+                "last_intent": convo_class,
+                "last_message": message,
+                "task": {
+                    "intent": intent,
+                    "collected_data": merged_data,
+                    "status": "in_progress"
+                }
+            }
+        )
 
-    #     # # 3. Merge extracted data
-    #     # current_task["data"].update(data)
+        append_history(user_id, {
+            "type": convo_class,
+            "message": message,
+            "bot_response": response
+        })
 
-    #     # # 4. Save session
-    #     # update_session(
-    #     #     user_id=user_id,
-    #     #     updates={
-    #     #         "mode": "task",
-    #     #         "task": current_task,
-    #     #         "last_intent": intent,
-    #     #         "last_message": message
-    #     #     }
-    #     # )
+        # handle result
+        if valid["valid"]:
+            clear_task(user_id)
+            return "Task completed successfully"
 
-    #     # append_history(user_id, {
-    #     #     "type": "task",
-    #     #     "message": message
-    #     # })
+        return {
+            "status": "incomplete",
+            "missing_fields": [e["field"] for e in valid["errors"]],
+            "message": "Provide missing fields"
+        }
         
+    elif convo_class == 'sales_conversation':
+        response = salesbot(message, session)
+
+        if response.get('error'):
+            return 'LLM down'
+
+        intent = response.get('intent')
+        data = response.get('data') or {}
+
+        task = session.get("task") or {}
+
+        existing_data = task.get("collected_data", {})
+        existing_intent = task.get("intent")
+
+        # preserve intent ONLY if LLM didn't return one
+        if existing_intent and intent is None:
+            intent = existing_intent
+
+        # merge data
+        merged_data = {**existing_data, **data}
+
+        # # enrich with DB (your rule)
+        # if intent in ["record_sale", "record_purchase"]:
+        #     if "items" in merged_data:
+        #         merged_data["items"] = enrich_items_with_price(merged_data["items"])
+
+        # validate
+        valid = validator(
+            msg_class=convo_class,
+            intent=intent,
+            data=merged_data
+        )
+
+        # update session
+        update_session(
+            user_id=user_id,
+            updates={
+                "mode": "task",
+                "last_intent": convo_class,
+                "last_message": message,
+                "task": {
+                    "intent": intent,
+                    "collected_data": merged_data,
+                    "status": "in_progress"
+                }
+            }
+        )
+
+        append_history(user_id, {
+            "type": convo_class,
+            "message": message,
+            "bot_response": response
+        })
+
+        if valid["valid"]:
+            clear_task(user_id)
+            return "Task completed successfully"
+
+        return {
+            "status": "incomplete",
+            "missing_fields": [e["field"] for e in valid["errors"]],
+            "message": "Provide missing fields"
+        }
     return
+
+
+if __name__ == "__main__":
+    
+    while True:
+        
+        val = input('You: ')
+        if val == 'quit' or val == 'exit':
+            break
+        
+        response = process_message('whatsapp:+2349133881829', val)
+        print(f'Bot: {response}')
+        
+    

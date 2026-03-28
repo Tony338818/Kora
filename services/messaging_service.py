@@ -18,3 +18,7 @@ def send_message(message: str, phone: str):
     )
     
     print(f'Message Sent')
+    print(f"SID: {message.sid}")
+    print(f"Status: {message.status}")
+    print(f"Error Code: {message.error_code}")
+    print(f"Error Message: {message.error_message}")
