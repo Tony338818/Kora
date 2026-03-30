@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, Integer, Boolean, ForeignKey, Float, DateTime
+from sqlalchemy import UniqueConstraint, create_engine, Column, String, Integer, Boolean, ForeignKey, Float, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from dotenv import load_dotenv
 import os
@@ -50,6 +50,10 @@ class Products(Base):
 
     user = relationship("Users", back_populates="products")
     transaction_items = relationship("TransactionItem", back_populates="product")
+    
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_user_product_name"),
+    )
 
 
 # 3. Transactions Table

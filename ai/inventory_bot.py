@@ -9,9 +9,9 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def build_inventory_prompt(message: str, session: dict | None = None) -> str:
-    task = (session.get("task") or {}) if session else {}
-    session_data   = session.get("data", {}) if session else {}
-    session_intent = session.get("intent") if session else None
+    task           = (session.get("task") or {}) if session else {}
+    session_data   = task.get("collected_data", {})
+    session_intent = task.get("intent")
 
     return f"""
 You are a STRICT inventory extraction engine.

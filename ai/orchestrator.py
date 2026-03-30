@@ -1,13 +1,16 @@
 from ai.validator import validator
+from dependency.db import get_db
+from services.dispatch_service import dispatch
 from dependency.session import get_session, update_session, append_history, clear_task
 from ai.chatbot import chatbot
 from ai.inventory_bot import inventorybot
 from ai.sales_bot import salesbot
 from ai.semantic_router import SemanticRouter
+from sqlalchemy.orm import Session
 
 
 router = SemanticRouter()
-def process_message(user_id: str, message: str):
+def process_message(db: Session, user_id: str, message: str):
     """
     1) Get user the message and Load session
     2) Classify the message and call the right model
@@ -64,7 +67,7 @@ def process_message(user_id: str, message: str):
         existing_intent = task.get("intent")
 
         # preserve intent
-        if existing_intent:
+        if existing_intent and intent is None:
             intent = existing_intent
 
         # merge data
@@ -100,8 +103,12 @@ def process_message(user_id: str, message: str):
 
         # handle result
         if valid["valid"]:
+            print(f'user_id {user_id}')
+            print(f'intent: {intent}')
+            print(f'data: {merged_data}')
+            result = dispatch(db, user_id, intent, merged_data)
             clear_task(user_id)
-            return "Task completed successfully"
+            return result
 
         return {
             "status": "incomplete",
@@ -164,8 +171,12 @@ def process_message(user_id: str, message: str):
         })
 
         if valid["valid"]:
+            print(f'user_id {user_id}')
+            print(f'intent: {intent}')
+            print(f'data: {merged_data}')
+            result = dispatch(db, user_id, intent, merged_data)
             clear_task(user_id)
-            return "Task completed successfully"
+            return result
 
         return {
             "status": "incomplete",
@@ -176,14 +187,15 @@ def process_message(user_id: str, message: str):
 
 
 if __name__ == "__main__":
+    db = next(get_db())
     
     while True:
         
-        val = input('You: ')
-        if val == 'quit' or val == 'exit':
+        message = input('You: ')
+        if message == 'quit' or message == 'exit':
             break
         
-        response = process_message('whatsapp:+2349133881829', val)
+        response = process_message(db=db, user_id='whatsapp:+2349133881829', message=message)
         print(f'Bot: {response}')
         
     
