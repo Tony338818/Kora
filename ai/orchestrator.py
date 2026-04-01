@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 
 router = SemanticRouter()
-def process_message(db: Session, user_id: str, message: str):
+async def process_message(db: Session, user_id: str, message: str):
     """
     1) Get user the message and Load session
     2) Classify the message and call the right model
@@ -186,16 +186,16 @@ def process_message(db: Session, user_id: str, message: str):
     return
 
 
-if __name__ == "__main__":
-    db = next(get_db())
+# if __name__ == "__main__":
+#     db = next(get_db())
     
-    while True:
+#     while True:
         
-        message = input('You: ')
-        if message == 'quit' or message == 'exit':
-            break
+#         message = input('You: ')
+#         if message == 'quit' or message == 'exit':
+#             break
         
-        response = process_message(db=db, user_id='whatsapp:+2349133881829', message=message)
-        print(f'Bot: {response}')
+#         response = process_message(db=db, user_id='whatsapp:+2349133881829', message=message)
+#         print(f'Bot: {response}')
         
     
