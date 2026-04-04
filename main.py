@@ -5,7 +5,6 @@ from dependency.current_user import create_token
 from services.messaging_service import send_message
 from dependency.db import get_db
 from sqlalchemy.orm import Session
-from fastapi.templating import Jinja2Templates
 from services.otp_service import createOTP, verify_otp
 from schema.user_schema import RequestOTP, VerifyOTP
 
@@ -13,8 +12,6 @@ app = FastAPI(
     version='0.1',
     description='Business Operations Support System'
 )
-
-template = Jinja2Templates(directory='template')
 
 @app.post("/webhook")
 async def webhook(
@@ -43,10 +40,6 @@ async def webhook(
         content=str(resp),
         media_type="application/xml"
     )
-
-@app.get('/')
-def home(request: Request):
-    return template.TemplateResponse('index.html', {'request': request})
     
 @app.post('/request-otp')
 def get_otp(
