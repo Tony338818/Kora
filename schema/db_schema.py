@@ -19,9 +19,8 @@ class Users(Base):
     name = Column(String(30), nullable=True)
     phone_number = Column(String(20), unique=True, nullable=False)
     email = Column(String(50), unique=True, nullable=True)
-    business_name = Column(String(50), unique=True, nullable=True)
+    business_name = Column(String(50), nullable=True)
     business_address = Column(String(50), nullable=True)
-    password = Column(String(255), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -93,6 +92,16 @@ class TransactionItem(Base):
 
     def __repr__(self):
         return f"<TransactionItem(product={self.product_name}, qty={self.quantity}, subtotal={self.subtotal})>"
+    
+
+# 5. OTP table
+class OTP(Base):
+    __tablename__ = "otp_table"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    phone_number = Column(String(20), unique=True, nullable=False)
+    otp_hash = Column(String(255), nullable=False)
+    expires_at = Column(DateTime)
+    is_used = Column(Boolean, default=False)
 
 
 Base.metadata.create_all(engine)
