@@ -9,8 +9,8 @@ from ai.semantic_router import SemanticRouter
 from sqlalchemy.orm import Session
 
 
-router = SemanticRouter()
-async def process_message(db: Session, user_id: str, message: str):
+
+async def process_message(db: Session, user_id: str, message: str, router: SemanticRouter):
     """
     1) Get user the message and Load session
     2) Classify the message and call the right model
@@ -184,18 +184,5 @@ async def process_message(db: Session, user_id: str, message: str):
             "message": "Provide missing fields"
         }
     return
-
-
-# if __name__ == "__main__":
-#     db = next(get_db())
-    
-#     while True:
-        
-#         message = input('You: ')
-#         if message == 'quit' or message == 'exit':
-#             break
-        
-#         response = process_message(db=db, user_id='whatsapp:+2349133881829', message=message)
-#         print(f'Bot: {response}')
         
     
