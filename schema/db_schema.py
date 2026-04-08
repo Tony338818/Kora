@@ -104,4 +104,4 @@ class OTP(Base):
     is_used = Column(Boolean, default=False)
 
 
-Base.metadata.create_all(engine)
+# Base.metadata.create_all(engine)

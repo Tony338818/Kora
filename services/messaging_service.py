@@ -24,6 +24,7 @@ def normalize_phone(phone: str) -> str:
         return '+' + cleaned
 
 def send_message(message: str, phone: str):
+    print('preparing to send message')
     sender = 'whatsapp:+14155238886'
     
     normalized = normalize_phone(phone)
@@ -35,7 +36,17 @@ def send_message(message: str, phone: str):
         to=receiver
     )
     
+    print(message.sid)
+    print(message.status)
+    
     return message
     
-async def send_onboarding_message(message: str):
+async def send_onboarding_messages(message: str):
+    """
+    Get basic info like
+    1. Name 
+    2. Business name
+    3. Business location
+    4. Type of business/what they sell
+    """
     pass

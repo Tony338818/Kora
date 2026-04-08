@@ -19,6 +19,7 @@ async def process_message(db: Session, user_id: str, message: str, router: Seman
     5) Call Backend
     6) send message to user
     """
+    print('began to process message')
 
     
     # Load session
@@ -49,7 +50,12 @@ async def process_message(db: Session, user_id: str, message: str, router: Seman
             "message": message,
             "bot_response": response,
         })
-        return response    
+        
+        return {
+            'success': True,
+            'message': response
+        }   
+     
     elif convo_class == 'inventory_conversation':
 
         response = inventorybot(message=message, session=session)
@@ -110,12 +116,12 @@ async def process_message(db: Session, user_id: str, message: str, router: Seman
             clear_task(user_id)
             return result
 
-        return {
-            "status": "incomplete",
-            "missing_fields": [e["field"] for e in valid["errors"]],
-            "message": "Provide missing fields"
-        }
-        
+        if not valid["valid"]:
+            return {
+                "status": "incomplete",
+                "message": valid["message"]
+            }
+                
     elif convo_class == 'sales_conversation':
         response = salesbot(message, session)
 
@@ -178,11 +184,45 @@ async def process_message(db: Session, user_id: str, message: str, router: Seman
             clear_task(user_id)
             return result
 
-        return {
-            "status": "incomplete",
-            "missing_fields": [e["field"] for e in valid["errors"]],
-            "message": "Provide missing fields"
-        }
-    return
-        
+        if not valid["valid"]:
+            return {
+                "status": "incomplete",
+                "message": valid["message"]
+            }
+            
+    return response
+
+FIELD_LABELS = {
+    "product_name": "product name",
+    "quantity": "quantity",
+    "unit_price": "price",
+    "total_price": "total amount"
+}
+
+INTENT_PROMPTS = {
+    "add_product": "I need a few more details to add this product.",
+    "record_sale": "I need a bit more info to record this sale.",
+    "update_stock": "You're updating stock, but I need some missing info."
+}
+
+def build_missing_fields_message(intent: str, missing_fields: list[str]) -> str:
     
+    # map fields to readable labels
+    readable_fields = [
+        FIELD_LABELS.get(field, field.replace("_", " "))
+        for field in missing_fields
+    ]
+
+    # build natural list (A, B and C)
+    if len(readable_fields) == 1:
+        fields_text = readable_fields[0]
+    elif len(readable_fields) == 2:
+        fields_text = f"{readable_fields[0]} and {readable_fields[1]}"
+    else:
+        fields_text = ", ".join(readable_fields[:-1]) + f", and {readable_fields[-1]}"
+
+    # get intent-specific intro
+    intro = INTENT_PROMPTS.get(intent, "I need some more details.")
+
+    # final message
+    return f"{intro}\nPlease provide the {fields_text}."

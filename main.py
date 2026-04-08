@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Form, Response, Depends, Request
 from twilio.twiml.messaging_response import MessagingResponse
 from ai.orchestrator import process_message
+from dependency.session import get_session, update_session
 from services.messaging_service import send_message, normalize_phone
 from dependency.db import get_db
 from sqlalchemy.orm import Session
@@ -33,36 +34,40 @@ async def startup_event():
     
 def get_semantic_router() -> SemanticRouter:
     return semantic_router
-    
+
 
 @app.post("/webhook")
 async def webhook(
     Body: str = Form(...),
     From: str = Form(...),
-    To: str = Form(...),
-    ProfileName: str = Form(default=None),
     db: Session = Depends(get_db),
     router: SemanticRouter = Depends(get_semantic_router)
 ):
-    
-    print("WEBHOOK HIT")
-    print(f"Message: {Body}")
-    print(f"From: {From}")
+    print('Webhook')
 
     normalized_phone = normalize_phone(From)
     message = Body
     
-    # check if user exists if not no response from the bot
-    user = readUser(db=db, phone_number=normalized_phone)
-    
-    if not user.get('exists'):
-        send_message(message='NO Account Found for this number please go to our site to create an account', phone=normalized_phone)
-        return False
-    
+    session = get_session(normalized_phone)
+
+    if "user_id" not in session:
+        user = readUser(db=db, phone_number=normalized_phone)
+
+        if not user.get("exists"):
+            send_message(
+                message="No account found. Please create one on our site.",
+                phone=normalized_phone
+            )
+            return Response(status_code=200)
+
+        update_session(normalized_phone, {
+            "user_id": user.get("user_id")
+        })
+
     # Call orchestrator 
     result = await process_message(db=db,user_id=normalized_phone, message=message, router=router)
     print(result)
-    send_message(message=result, phone=normalized_phone)
+    send_message(message=result.get('message'), phone=normalized_phone)
 
     resp = MessagingResponse()
     
@@ -84,11 +89,8 @@ def get_otp(
         return {
             'success': otp.get('success'),
         }
-    message = {
-        'message': otp.get('message'),
-        'otp': otp.get('otp')
-    }
-    send_message(message=message['otp'], phone=normalized_phone)
+    message = f'{otp.get('message')}, this is your OTP: {otp.get('otp')}'
+    send_message(message=message, phone=normalized_phone)
     return otp
 
 @app.post('/verify-otp')

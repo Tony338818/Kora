@@ -1,20 +1,18 @@
-import json
-import os
+import time
+from typing import Dict
 
-SESSION_FILE = "sessions.json"
+# ─── CONFIG ─────────────────────────────────────────────────────
 
+SESSION_TIMEOUT = 600
 
-def _load_sessions():
-    if not os.path.exists(SESSION_FILE):
-        return {}
+# ─── IN-MEMORY STORE ────────────────────────────────────────────
 
-    with open(SESSION_FILE, "r") as f:
-        return json.load(f)
+sessions: Dict[str, dict] = {}
 
+# ─── HELPERS ────────────────────────────────────────────────────
 
-def _save_sessions(sessions):
-    with open(SESSION_FILE, "w") as f:
-        json.dump(sessions, f, indent=2)
+def _now():
+    return time.time()
 
 
 def _default_session():
@@ -27,53 +25,81 @@ def _default_session():
     }
 
 
-# Get session
+def _is_expired(last_seen: float) -> bool:
+    return (_now() - last_seen) > SESSION_TIMEOUT
+
+
+def _cleanup_expired():
+    """Remove expired sessions (lazy cleanup)."""
+    expired_users = [
+        user_id for user_id, session in sessions.items()
+        if _is_expired(session["last_seen"])
+    ]
+
+    for user_id in expired_users:
+        del sessions[user_id]
+
+# ─── CORE FUNCTIONS ─────────────────────────────────────────────
+
 def get_session(user_id: str) -> dict:
-    sessions = _load_sessions()
-    return sessions.get(user_id, _default_session())
+    _cleanup_expired()
+
+    session_obj = sessions.get(user_id)
+
+    if not session_obj:
+        # create new session
+        sessions[user_id] = {
+            "data": _default_session(),
+            "last_seen": _now()
+        }
+        return sessions[user_id]["data"]
+
+    # check expiry
+    if _is_expired(session_obj["last_seen"]):
+        sessions[user_id] = {
+            "data": _default_session(),
+            "last_seen": _now()
+        }
+        return sessions[user_id]["data"]
+
+    # update activity timestamp
+    session_obj["last_seen"] = _now()
+
+    return session_obj["data"]
 
 
-# Update session (safe merge)
 def update_session(user_id: str, updates: dict):
-    sessions = _load_sessions()
-    current = sessions.get(user_id, _default_session())
+    session = get_session(user_id)
 
-    # shallow merge for top-level
+    # merge updates
     for key, value in updates.items():
         if key == "task" and value is not None:
-            # merge task separately
-            current["task"] = {
-                **(current.get("task") or {}),
+            session["task"] = {
+                **(session.get("task") or {}),
                 **value
             }
         else:
-            current[key] = value
+            session[key] = value
 
-    sessions[user_id] = current
-    _save_sessions(sessions)
+    # update timestamp
+    sessions[user_id]["last_seen"] = _now()
 
 
-# Append to history
 def append_history(user_id: str, entry: dict):
-    sessions = _load_sessions()
-    current = sessions.get(user_id, _default_session())
+    session = get_session(user_id)
 
-    current["history"].append(entry)
+    session["history"].append(entry)
 
-    sessions[user_id] = current
-    _save_sessions(sessions)
+    sessions[user_id]["last_seen"] = _now()
 
 
-# Clear ONLY task (not whole session)
 def clear_task(user_id: str):
-    sessions = _load_sessions()
-    current = sessions.get(user_id, _default_session())
+    session = get_session(user_id)
 
-    if current.get("task"):
-        current["last_completed_task"] = current["task"]
+    if session.get("task"):
+        session["last_completed_task"] = session["task"]
 
-    current["task"] = None
-    current["mode"] = "chat"
+    session["task"] = None
+    session["mode"] = "chat"
 
-    sessions[user_id] = current
-    _save_sessions(sessions)
+    sessions[user_id]["last_seen"] = _now()

@@ -6,113 +6,145 @@ from pydantic import ValidationError
 
 def validator(msg_class: str, intent: str, data: dict):
     if msg_class == "inventory_conversation":
-        errors = inventory_intent_validator(intent, data)
+        result = inventory_intent_validator(intent, data)
     elif msg_class == "sales_conversation":
-        errors = sales_intent_validator(intent, data)
+        result = sales_intent_validator(intent, data)
     else:
         return {
             "valid": False,
-            "errors": [{"message": "Invalid class"}]
+            "message": "Invalid request type"
         }
 
-    return {
-        "valid": len(errors) == 0,
-        "errors": errors
-    }
+    return result
     
 def inventory_intent_validator(intent: str, data: dict):
     try:
         if intent == "add_product":
             ProductCreate(**data)
+            return {"valid": True}
 
-        elif intent == "increment_stock_quantity":
-            if "name" not in data or "quantity" not in data:
-                return [{"field": "name/quantity", "message": "Missing required fields"}]
-            
-        elif intent == "decrement_stock_quantity":
-            if "name" not in data or "quantity" not in data:
-                return [{"field": "name/quantity", "message": "Missing required fields"}]
+        elif intent in ["increment_stock_quantity", "decrement_stock_quantity"]:
+            name = data.get("name")
+            quantity = data.get("quantity")
+
+            if not name and not quantity:
+                return {"valid": False, "message": "Please provide the product name and quantity."}
+            elif not name:
+                return {"valid": False, "message": "Which product are you referring to?"}
+            elif not quantity:
+                return {"valid": False, "message": "How many units should I update?"}
+
+            return {"valid": True}
 
         elif intent == "update_cost_price":
-            if "name" not in data or "cost_price" not in data:
-                return [{"field": "cost_price", "message": "Missing price"}]
-            
+            name = data.get("name")
+            price = data.get("cost_price")
+
+            if not name and not price:
+                return {"valid": False, "message": "Please provide the product name and cost price."}
+            elif not name:
+                return {"valid": False, "message": "Which product do you want to update?"}
+            elif not price:
+                return {"valid": False, "message": "What is the new cost price?"}
+
+            return {"valid": True}
+
         elif intent == "update_selling_price":
-            if "name" not in data or "selling_price" not in data:
-                return [{"field": "selling_price", "message": "Missing price"}]
+            name = data.get("name")
+            price = data.get("selling_price")
+
+            if not name and not price:
+                return {"valid": False, "message": "Please provide the product name and selling price."}
+            elif not name:
+                return {"valid": False, "message": "Which product do you want to update?"}
+            elif not price:
+                return {"valid": False, "message": "What is the new selling price?"}
+
+            return {"valid": True}
 
         elif intent == "get_product_info":
-            if "name" not in data:
-                return [{"field": "name", "message": "Product name required"}]
-            
+            if not data.get("name"):
+                return {"valid": False, "message": "Which product do you want information about?"}
+            return {"valid": True}
+
         elif intent == "change_product_availabilty":
-            if "name" not in data or "available" not in data:
-                return [{"field": "name", "message": "Product name required"}]
+            name = data.get("name")
+            available = data.get("available")
+
+            if not name and available is None:
+                return {"valid": False, "message": "Please provide the product name and availability status."}
+            elif not name:
+                return {"valid": False, "message": "Which product are you updating?"}
+            elif available is None:
+                return {"valid": False, "message": "Should the product be available or unavailable?"}
+
+            return {"valid": True}
 
         elif intent == "delete_product":
-            if "name" not in data:
-                return [{"field": "name", "message": "Product name required"}]
+            if not data.get("name"):
+                return {"valid": False, "message": "Which product do you want to delete?"}
+            return {"valid": True}
 
         elif intent == "view_inventory":
-            return []
-        
-        else:
-            return [{"error": "Unknown intent"}]
+            return {"valid": True}
 
-        return []
+        else:
+            return {"valid": False, "message": "Unknown inventory action"}
 
     except ValidationError as e:
-        return parse_validation_error(e)
+        return {
+            "valid": False,
+            "message": parse_validation_error_message(e)
+        }
     
 
 def sales_intent_validator(intent: str, data: dict):
     try:
-        if intent == "record_sale" or intent == "record_purchase":
+        if intent in ["record_sale", "record_purchase"]:
 
-            # --- Validate items existence ---
-            if "items" not in data or not isinstance(data["items"], list) or len(data["items"]) == 0:
-                return [{"field": "items", "message": "At least one item is required"}]
+            items = data.get("items")
 
-            # --- Validate each item manually (important for good errors) ---
-            for i, item in enumerate(data["items"]):
-                if "product_name" not in item:
-                    return [{"field": f"items[{i}].product_name", "message": "Product name required"}]
+            if not items:
+                return {"valid": False, "message": "What items are you recording?"}
 
-                if "quantity" not in item:
-                    return [{"field": f"items[{i}].quantity", "message": "Quantity required"}]
+            item = items[0]  # keep simple for now
 
-                if "unit_price" not in item:
-                    return [{"field": f"items[{i}].unit_price", "message": "Unit price required"}]
+            name = item.get("product_name")
+            quantity = item.get("quantity")
+            price = item.get("unit_price")
 
-            # --- Validate full schema (final check) ---
+            if not name and not quantity and not price:
+                return {"valid": False, "message": "Please provide product name, quantity, and price."}
+            elif not name:
+                return {"valid": False, "message": "Which product was involved?"}
+            elif not quantity:
+                return {"valid": False, "message": "How many units were involved?"}
+            elif not price:
+                return {"valid": False, "message": "What price was it sold for?"}
+
             TransactionCreate(**data)
+            return {"valid": True}
 
-        elif intent == "generate_receipt":
-            if "transaction_id" not in data:
-                return [{"field": "transaction_id", "message": "Transaction ID required"}]
-
-        elif intent == "get_transaction":
-            if "transaction_id" not in data:
-                return [{"field": "transaction_id", "message": "Transaction ID required"}]
+        elif intent in ["generate_receipt", "get_transaction"]:
+            if not data.get("transaction_id"):
+                return {"valid": False, "message": "Please provide the transaction ID."}
+            return {"valid": True}
 
         elif intent == "list_transactions":
-            return []
+            return {"valid": True}
 
         else:
-            return [{"error": "Unknown intent"}]
-
-        return []
+            return {"valid": False, "message": "Unknown sales action"}
 
     except ValidationError as e:
-        return parse_validation_error(e)
+        return {
+            "valid": False,
+            "message": parse_validation_error_message(e)
+        }
 
-def parse_validation_error(e: ValidationError):
-    errors = []
+def parse_validation_error_message(e: ValidationError):
+    first_error = e.errors()[0]
+    field = first_error["loc"][0]
+    msg = first_error["msg"]
 
-    for err in e.errors():
-        errors.append({
-            "field": err["loc"][0],
-            "message": err["msg"]
-        })
-
-    return errors
+    return f"{field.replace('_', ' ').capitalize()} error: {msg}"

@@ -28,6 +28,7 @@ HANDLERS = {
 }
 
 def dispatch(db, phone: str, intent: str, data: dict) -> str:
+    print('entered dispatch')
     handler = HANDLERS.get(intent)
     if not handler:
         return "Unknown intent."
