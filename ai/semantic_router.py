@@ -75,7 +75,7 @@ class SemanticRouter:
         Uses pre-computed embeddings - NO file loading happens here.
         """
         print('began encoding')
-        query_embedding = self.model.encode(user_query, convert_to_tensor=True)
+        query_embedding = self.model.encode(user_query, convert_to_tensor=True) 
         
         best_route = None
         highest_score = -1.0

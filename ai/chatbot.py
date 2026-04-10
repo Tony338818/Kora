@@ -13,7 +13,6 @@ def build_chat_prompt(message: str, session: dict | None = None) -> str:
     task           = (session.get("task") or {}) if session else {}
     session_data   = task.get("collected_data", {})
     session_intent = task.get("intent")
-    mode           = session.get("mode") if session else None
 
     return f"""
 You are a CONTROLLED retail assistant.

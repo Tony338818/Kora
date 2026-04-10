@@ -143,11 +143,6 @@ async def process_message(db: Session, user_id: str, message: str, router: Seman
         # merge data
         merged_data = {**existing_data, **data}
 
-        # # enrich with DB (your rule)
-        # if intent in ["record_sale", "record_purchase"]:
-        #     if "items" in merged_data:
-        #         merged_data["items"] = enrich_items_with_price(merged_data["items"])
-
         # validate
         valid = validator(
             msg_class=convo_class,
