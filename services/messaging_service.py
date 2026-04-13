@@ -16,8 +16,7 @@ def normalize_phone(phone: str) -> str:
     # Remove all non-digit characters except +
     cleaned = ''.join(c for c in phone if c.isdigit() or c == '+')
     
-    # Remove leading zeros after country code if any
-    if cleaned.startswith('+'):
+    # Remove leading zeros after country code 
         return cleaned
     else:
         # Add + if missing
