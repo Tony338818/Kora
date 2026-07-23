@@ -3,7 +3,7 @@ from dependency.db import get_db
 from sqlalchemy.orm import Session
 from schema.user_schema import RequestOTP, UserCreate, VerifyOTP
 from services.messaging_service import send_message
-from services.otp_service import create_otp, verify_otp
+from services.otp_service import OTPService as otps
 from services.user_service import create_user
 from utils import normalize_phone as np
 
@@ -15,8 +15,7 @@ def get_otp(
     db: Session = Depends(get_db)):
     
     normalized_phone = np.normalize_phone_numbers(data.phone_number)
-    
-    otp = create_otp(db=db, data=data)
+    otp = otps.create_otp(db=db, data=data)
     
     if not otp.get('success'):
         return {
@@ -30,8 +29,7 @@ def get_otp(
 async def handle_otp(
     data: VerifyOTP,
     db: Session = Depends(get_db)):
-    
-    result = verify_otp(db=db, data=data)
+    result = otps.verify_otp(db=db, data=data)
     
     if not result.get('valid'):
         return {
@@ -46,7 +44,8 @@ async def handle_otp(
     print(user)
     
     if not user.get('success'):
-        send_message(message='Unable to create user account please try again!', phone=normalized_phone)
+        return user
+        # send_message(message='Unable to create user account please try again!', phone=normalized_phone)
     
     # send message to user for onboarding
     send_message(message='Welcome i\'m Reece your smart ai assistant, whats your name', phone=normalized_phone)
