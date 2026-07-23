@@ -1,7 +1,8 @@
 from ai.validator import validator
+from schema.conversation_schema import ConversationState
 from dependency.db import get_db
 from services.dispatch_service import dispatch
-from dependency.session import get_session, update_session, append_history, clear_task
+from dependency.session import session_service
 from ai.chatbot import chatbot
 from ai.inventory_bot import inventorybot
 from ai.sales_bot import salesbot
@@ -10,214 +11,139 @@ from sqlalchemy.orm import Session
 
 
 
-async def process_message(db: Session, user_id: str, message: str, router: SemanticRouter):
-    """
-    1) Get user the message and Load session
-    2) Classify the message and call the right model
-    3) LLM extracts intent and data
-    4) Call Validator
-    5) Call Backend
-    6) send message to user
-    """
-    print('began to process message')
+async def process_message(
+    db: Session, 
+    message: str, 
+    router: SemanticRouter, 
+    session: ConversationState):
 
+
+    # 1. Route intent
+    route = router.route(
+        user_query=message,
+        session=session.model_dump()
+    )
+
+    convo_class = route.get(
+        "best_route"
+    )
     
-    # Load session
-    session = get_session(user_id)
-    session_intent = session.get('intent')
-    session_data = session.get("data", {})
-    
-    # classify
-    route = router.route(user_query=message, session=session)
+    # Casual Conversation Bot
 
-    # routing
-    convo_class = route.get('best_route')
-    if convo_class == 'casual_conversation':
-        response = chatbot(message, session)
+    if convo_class == "casual_conversation":
+            response = chatbot(message, session.model_dump())
 
-        update_session(
-            user_id=user_id,
-            updates={
-                "mode": "chat",
-                "last_intent": convo_class,
-                "last_message": message,
-                "task": None
+            # Synchronous in-memory update (no await)
+            session_service.add_message(session, "assistant", response)
+
+            return {
+                "success": True,
+                "message": response
             }
-        )
-
-        append_history(user_id, {
-            "type": convo_class,
-            "message": message,
-            "bot_response": response,
-        })
         
-        return {
-            'success': True,
-            'message': response
-        }   
-     
-    elif convo_class == 'inventory_conversation':
-
-        response = inventorybot(message=message, session=session)
         
-        if response.get('error'):
-            response = 'LLM down'
-            return response
+    # Inventory Management
+    elif convo_class == "inventory_conversation":
 
-        intent = response.get('intent')
-        data = response.get('data') or {}
+        response = inventorybot(message=message, session=session.model_dump())
 
-        task = session.get("task") or {}
+        if isinstance(response, dict) and response.get("error"):
+            return {"success": False, "message": "LLM down"}
 
-        existing_data = task.get("collected_data", {})
-        existing_intent = task.get("intent")
+        intent = response.get("intent")
+        data = response.get("data") or {}
 
-        # preserve intent
-        if existing_intent and intent is None:
+        # Preserve existing intent if LLM didn't return a new one
+        existing_intent = session.task.intent
+        if existing_intent and not intent:
             intent = existing_intent
 
-        # merge data
-        merged_data = {**existing_data, **data}
+        # Update slots in memory
+        session_service.update_task(session=session, intent=intent, slots=data)
 
-        # validate merged data
+        # Validate merged slots
         valid = validator(
             msg_class=convo_class,
             intent=intent,
-            data=merged_data
+            data=session.task.slots
         )
 
-        # update session
-        update_session(
-            user_id=user_id,
-            updates={
-                "mode": "task",
-                "last_intent": convo_class,
-                "last_message": message,
-                "task": {
-                    "intent": intent,
-                    "collected_data": merged_data,
-                    "status": "in_progress"
-                }
-            }
-        )
+        if valid.get("valid"):
+            # Execute database action & clear task
+            result = dispatch(db, session.user_id, intent, session.task.slots)
+            session_service.clear_task(session=session)
 
-        append_history(user_id, {
-            "type": convo_class,
-            "message": message,
-            "bot_response": response
-        })
+            bot_msg = result.get("message", "Inventory task completed!") if isinstance(result, dict) else str(result)
+            session_service.add_message(session, "assistant", bot_msg)
+            return {"success": True, "message": bot_msg}
 
-        # handle result
-        if valid["valid"]:
-            print(f'user_id {user_id}')
-            print(f'intent: {intent}')
-            print(f'data: {merged_data}')
-            result = dispatch(db, user_id, intent, merged_data)
-            clear_task(user_id)
-            return result
-
-        if not valid["valid"]:
-            return {
-                "status": "incomplete",
-                "message": valid["message"]
-            }
+        else:
+            # Task incomplete - ask for missing fields
+            missing_fields = valid.get("missing_fields", [])
+            bot_msg = build_missing_fields_message(missing_fields)
+            session_service.add_message(session, "assistant", bot_msg)
+            return {"success": False, "message": bot_msg}
                 
-    elif convo_class == 'sales_conversation':
-        response = salesbot(message, session)
+    elif convo_class == "sales_conversation":
+        response = salesbot(message=message, session=session.model_dump())
 
-        if response.get('error'):
-            return 'LLM down'
+        if isinstance(response, dict) and response.get("error"):
+            return {"success": False, "message": "LLM down"}
 
-        intent = response.get('intent')
-        data = response.get('data') or {}
+        intent = response.get("intent")
+        data = response.get("data") or {}
 
-        task = session.get("task") or {}
+        # Preserve existing intent if the LLM didn't return a new one
+        task = session.task
+        existing_intent = task.intent
 
-        existing_data = task.get("collected_data", {})
-        existing_intent = task.get("intent")
-
-        # preserve intent ONLY if LLM didn't return one
-        if existing_intent and intent is None:
+        if existing_intent and not intent:
             intent = existing_intent
 
-        # merge data
-        merged_data = {**existing_data, **data}
+        # 1. Update task slots in memory
+        session_service.update_task(
+            session=session,
+            intent=intent,
+            slots=data
+        )
 
-        # validate
+        # 2. Validate merged slots
         valid = validator(
             msg_class=convo_class,
             intent=intent,
-            data=merged_data
+            data=session.task.slots
         )
 
-        # update session
-        update_session(
-            user_id=user_id,
-            updates={
-                "mode": "task",
-                "last_intent": convo_class,
-                "last_message": message,
-                "task": {
-                    "intent": intent,
-                    "collected_data": merged_data,
-                    "status": "in_progress"
-                }
-            }
-        )
+        if valid.get("valid"):
+            # Task is complete! Dispatch to database/service and clear task
+            result = dispatch(db, session.user_id, intent, session.task.slots)
+            session_service.clear_task(session=session)
 
-        append_history(user_id, {
-            "type": convo_class,
-            "message": message,
-            "bot_response": response
-        })
+            bot_msg = result.get("message", "Task completed!") if isinstance(result, dict) else str(result)
+            session_service.add_message(session, "assistant", bot_msg)
+            return {"success": True, "message": bot_msg}
 
-        if valid["valid"]:
-            print(f'user_id {user_id}')
-            print(f'intent: {intent}')
-            print(f'data: {merged_data}')
-            result = dispatch(db, user_id, intent, merged_data)
-            clear_task(user_id)
-            return result
-
-        if not valid["valid"]:
-            return {
-                "status": "incomplete",
-                "message": valid["message"]
-            }
+        else:
+            # Task is incomplete — ask user for missing fields
+            missing_fields = valid.get("missing_fields", [])
+            bot_msg = build_missing_fields_message(missing_fields)
+            session_service.add_message(session, "assistant", bot_msg)
+            return {"success": False, "message": bot_msg}
             
     return response
 
-FIELD_LABELS = {
-    "product_name": "product name",
-    "quantity": "quantity",
-    "unit_price": "price",
-    "total_price": "total amount"
-}
 
-INTENT_PROMPTS = {
-    "add_product": "I need a few more details to add this product.",
-    "record_sale": "I need a bit more info to record this sale.",
-    "update_stock": "You're updating stock, but I need some missing info."
-}
-
-def build_missing_fields_message(intent: str, missing_fields: list[str]) -> str:
+def build_missing_fields_message(missing_fields: list[str]) -> str:
+    # 1. Convert 'product_name' -> 'product name'
+    readable = [field.replace("_", " ") for field in missing_fields]
     
-    # map fields to readable labels
-    readable_fields = [
-        FIELD_LABELS.get(field, field.replace("_", " "))
-        for field in missing_fields
-    ]
-
-    # build natural list (A, B and C)
-    if len(readable_fields) == 1:
-        fields_text = readable_fields[0]
-    elif len(readable_fields) == 2:
-        fields_text = f"{readable_fields[0]} and {readable_fields[1]}"
+    # 2. Join fields into a natural phrase
+    if len(readable) == 1:
+        fields_str = readable[0]
+    elif len(readable) == 2:
+        fields_str = f"{readable[0]} and {readable[1]}"
     else:
-        fields_text = ", ".join(readable_fields[:-1]) + f", and {readable_fields[-1]}"
-
-    # get intent-specific intro
-    intro = INTENT_PROMPTS.get(intent, "I need some more details.")
-
-    # final message
-    return f"{intro}\nPlease provide the {fields_text}."
+        fields_str = f"{', '.join(readable[:-1])}, and {readable[-1]}"
+        
+    # 3. Return single direct prompt
+    return f"Please provide the missing {fields_str} to proceed."
