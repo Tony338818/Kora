@@ -10,26 +10,27 @@ from utils import normalize_phone as np
 router = APIRouter(prefix='/otp')
 
 @router.post('/send')
-def get_otp(
-    data: RequestOTP,
-    db: Session = Depends(get_db)):
-    
+async def get_otp(data: RequestOTP):
     normalized_phone = np.normalize_phone_numbers(data.phone_number)
-    otp = otps.create_otp(db=db, data=data)
+    
+    # We need to await the async call here
+    otp = await otps.create_otp(phone_number=normalized_phone)
     
     if not otp.get('success'):
-        return {
-            'success': otp.get('success'),
-        }
-    message = f'{otp.get('message')}, this is your OTP: {otp.get('otp')}'
+        return {'success': False}
+        
+    message = f"{otp.get('message')}, this is your OTP: {otp.get('otp')}"
     send_message(message=message, phone=normalized_phone)
     return otp
 
 @router.post('/verify')
 async def handle_otp(
     data: VerifyOTP,
-    db: Session = Depends(get_db)):
-    result = otps.verify_otp(db=db, data=data)
+    db: Session = Depends(get_db)
+    ):
+    
+    normalized_phone = np.normalize_phone_numbers(data.phone_number)
+    result = await otps.verify_otp(phone_number=normalized_phone, otp_code=data.otp_code)
     
     if not result.get('valid'):
         return {
@@ -37,10 +38,9 @@ async def handle_otp(
         }
     
     # create new user
-    normalized_phone = np.normalize_phone_numbers(data.phone_number)
     payload = UserCreate(phone_number=normalized_phone)
     
-    user = await create_user(db=db, user=payload)
+    user = await create_user(db = db, user=payload)
     print(user)
     
     if not user.get('success'):
