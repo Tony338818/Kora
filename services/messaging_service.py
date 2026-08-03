@@ -17,13 +17,9 @@ def normalize_phone(phone: str) -> str:
     cleaned = ''.join(c for c in phone if c.isdigit() or c == '+')
     
     # Remove leading zeros after country code 
-        return cleaned
-    else:
-        # Add + if missing
-        return '+' + cleaned
+    return cleaned
 
 def send_message(message: str, phone: str):
-    print('preparing to send message')
     sender = 'whatsapp:+14155238886'
     
     normalized = normalize_phone(phone)
@@ -34,9 +30,6 @@ def send_message(message: str, phone: str):
         body=message,
         to=receiver
     )
-    
-    print(message.sid)
-    print(message.status)
     
     return message
     

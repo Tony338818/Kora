@@ -1,7 +1,3 @@
-from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from schema.db_schema import OTP
-from schema.user_schema import RequestOTP, VerifyOTP
 import bcrypt
 import secrets
 from dependency.redis import redis_client

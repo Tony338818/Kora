@@ -1,0 +1,103 @@
+__label__INVENTORY add coke
+__label__INVENTORY add 5 coke
+__label__INVENTORY bought pepsi today
+__label__INVENTORY add 20 fanta
+__label__INVENTORY received 15 bottles of sprite
+__label__INVENTORY bring in 10 cartons of milk
+__label__INVENTORY stock 3 crates of eggs
+__label__INVENTORY we just got 12 bags of rice
+__label__INVENTORY new delivery of 8 packs of indomie
+__label__INVENTORY add fresh bread to inventory
+__label__INVENTORY received 50 sachets of pure water
+__label__INVENTORY add two more phone chargers
+__label__INVENTORY restocked 6 tins of tomato paste
+
+__label__INVENTORY show me all products
+__label__INVENTORY what do we have in stock
+__label__INVENTORY list everything in the store
+__label__INVENTORY check inventory
+__label__INVENTORY display all items
+__label__INVENTORY let me see the warehouse items
+__label__INVENTORY do we still have coke
+__label__INVENTORY how many bags of rice remain
+__label__INVENTORY check stock for indomie
+__label__INVENTORY show available drinks
+
+__label__INVENTORY show details for product 12
+__label__INVENTORY get info for item 5
+__label__INVENTORY what is the price of product 7
+__label__INVENTORY check product 33
+__label__INVENTORY show me product 101
+__label__INVENTORY open item 9
+__label__INVENTORY view product 44
+__label__INVENTORY tell me about product 3
+
+__label__INVENTORY update product 12 quantity to 40
+__label__INVENTORY change price of product 5 to 1200
+__label__INVENTORY modify product 7 name to big bread
+__label__INVENTORY adjust product 9 quantity by +10
+__label__INVENTORY reduce product 3 stock by 5
+__label__INVENTORY update product 22 set price 450
+__label__INVENTORY change product 11 to new name family loaf
+__label__INVENTORY increase product 8 quantity to 60
+
+__label__INVENTORY delete product 12
+__label__INVENTORY remove product 5
+__label__INVENTORY clear out product 7
+__label__INVENTORY delete item 3 from inventory
+__label__INVENTORY remove expired product 9
+__label__INVENTORY take out product 44
+__label__INVENTORY delete damaged item 2
+__label__INVENTORY remove old stock product 18
+
+__label__INVENTORY i sold 4 bottles of coke
+__label__INVENTORY customer bought 2 bags of rice
+__label__INVENTORY record a sale
+__label__INVENTORY make a sale
+__label__INVENTORY today's sales
+__label__INVENTORY sales report
+__label__INVENTORY low stock items
+__label__INVENTORY products running out
+__label__INVENTORY which items are almost finished
+__label__INVENTORY search for indomie
+__label__INVENTORY find milk
+__label__INVENTORY locate product
+__label__INVENTORY inventory report
+__label__INVENTORY stock summary
+__label__INVENTORY available inventory
+__label__INVENTORY warehouse report
+__label__INVENTORY product list
+__label__INVENTORY stock balance
+__label__INVENTORY inventory status
+__label__INVENTORY check my store
+
+__label__CASUAL hello
+__label__CASUAL hi
+__label__CASUAL good morning
+__label__CASUAL good afternoon
+__label__CASUAL good evening
+__label__CASUAL how are you
+__label__CASUAL what's up
+__label__CASUAL who are you
+__label__CASUAL thank you
+__label__CASUAL thanks
+__label__CASUAL bye
+__label__CASUAL see you later
+__label__CASUAL tell me a joke
+__label__CASUAL can you help me
+__label__CASUAL what can you do
+__label__CASUAL how does this work
+__label__CASUAL who made you
+__label__CASUAL nice to meet you
+__label__CASUAL i am bored
+__label__CASUAL let's chat
+__label__CASUAL what's today's date
+__label__CASUAL what's the weather
+__label__CASUAL tell me something interesting
+__label__CASUAL how old are you
+__label__CASUAL good night
+__label__CASUAL okay
+__label__CASUAL yes
+__label__CASUAL no
+__label__CASUAL alright
+__label__CASUAL cool

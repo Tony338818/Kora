@@ -1,11 +1,7 @@
 from services.inventory_service import InventoryService
-from services.transaction_service import (
-    record_sale, record_purchase, get_transaction,
-    list_transactions, generate_receipt
-)
 
-def dispatch(db, phone: str, intent: str, data: dict):
-    inventory = InventoryService(db, phone)
+def dispatch(db, user_id: str, intent: str, data: dict):
+    inventory = InventoryService(db, user_id)
 
     if intent == "add_product":
         return inventory.create_product(data)

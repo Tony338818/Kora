@@ -4,33 +4,38 @@ from dependency.db import get_db
 from services.dispatch_service import dispatch
 from dependency.session import session_service
 from ai.chatbot import chatbot
-from ai.inventory_bot import inventorybot
+from ai.inventory_bot import inventorybot, inventory_spacy_model
 from ai.sales_bot import salesbot
 from ai.semantic_router import SemanticRouter
 from sqlalchemy.orm import Session
+from fastapi import Request
 
 
 
 async def process_message(
     db: Session, 
+    user_id: str,
     message: str, 
-    router: SemanticRouter, 
-    session: ConversationState):
+    session: ConversationState,
+    request: Request):
+    
+    conversation_model = request.state.conversation_classifier 
+    labels, scores = conversation_model.predict(message)
 
-
-    # 1. Route intent
-    route = router.route(
-        user_query=message,
-        session=session.model_dump()
-    )
-
-    convo_class = route.get(
-        "best_route"
-    )
+    convo_class = labels[0].replace("__label__", "").lower()
+    confidence = scores[0]
+    
+    print(convo_class, confidence)
+    
+    intent_model = request.state.inventory_classifier
+    labels, scores = intent_model.predict(message)
+    
+    intent_class = labels[0].replace("__label__", "").lower()
+    confidence = scores[0]
+    print(intent_class, confidence)
     
     # Casual Conversation Bot
-
-    if convo_class == "casual_conversation":
+    if convo_class == "casual":
             response = chatbot(message, session.model_dump())
 
             # Synchronous in-memory update (no await)
@@ -41,17 +46,14 @@ async def process_message(
                 "message": response
             }
         
-        
     # Inventory Management
-    elif convo_class == "inventory_conversation":
+    elif convo_class == "inventory":
+        # response = inventorybot(message=message, session=session.model_dump())
+        response = inventory_spacy_model(message=message)
+        print(response)
 
-        response = inventorybot(message=message, session=session.model_dump())
-
-        if isinstance(response, dict) and response.get("error"):
-            return {"success": False, "message": "LLM down"}
-
-        intent = response.get("intent")
-        data = response.get("data") or {}
+        intent = intent_class
+        data = response
 
         # Preserve existing intent if LLM didn't return a new one
         existing_intent = session.task.intent
@@ -70,7 +72,7 @@ async def process_message(
 
         if valid.get("valid"):
             # Execute database action & clear task
-            result = dispatch(db, session.user_id, intent, session.task.slots)
+            result = dispatch(db, user_id, intent, session.task.slots)
             session_service.clear_task(session=session)
 
             bot_msg = result.get("message", "Inventory task completed!") if isinstance(result, dict) else str(result)

@@ -4,6 +4,8 @@ from google.genai import types
 import os
 from dotenv import load_dotenv
 from schema.product_schema import ProductCreate
+from fastapi import Request
+
 
 load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -146,3 +148,18 @@ def inventorybot(message: str, session: dict | None = None) -> dict:
 
     except Exception as e:
         return {"error": 'Could not reach the LLM at this time'}
+      
+ 
+    
+def inventory_spacy_model(message: str, request: Request) -> dict:
+  
+  nlp = request.app.state.inventory_bot
+  
+  doc = nlp(message)
+  
+  data = {}
+  
+  for ent in doc.ents:
+    data[ent.label_] = ent.text
+
+  return data
