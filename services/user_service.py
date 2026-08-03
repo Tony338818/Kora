@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 
 # Create User
-async def createUser(db: Session, user: UserCreate):
+async def create_user(db: Session, user: UserCreate):
     try:
         new_user = Users(
             **user.model_dump()
@@ -19,19 +19,21 @@ async def createUser(db: Session, user: UserCreate):
             'message': f'User created successfully! {new_user.id}, {new_user.phone_number}'
         }
     except IntegrityError as e:
+        print('Issue Here')
+        print(e)
         return {
             'success': False,
-            'message': e._message
+            'message': e
         }
     except Exception as e:
+        print(e)
         return {
             'success': False,
             'message': str(e)
         }
         
 # Read user
-def readUser(db: Session, phone_number: str):
-    print('reading_user')
+def read_user(db: Session, phone_number: str):
     try:
         user =  db.query(Users).filter_by(phone_number=phone_number).first()
         if not user:

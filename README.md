@@ -1,4 +1,6 @@
 # Flagship Project
+# Project Name -> Base, Forge or Helm
+# AI Name -> Reece
 
 ## Overview
 

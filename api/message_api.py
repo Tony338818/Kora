@@ -6,7 +6,7 @@ from services.user_service import read_user
 from dependency.db import get_db
 from sqlalchemy.orm import Session
 from utils.normalize_phone import normalize_phone_numbers
-from dependency.session import get_session, update_session
+from dependency.session import session_service
 
 router = APIRouter(prefix='/conversations')
 
@@ -19,29 +19,43 @@ async def recieve_user_query(
     sender: str = Form(...),
     message: str = Form(...),
     db: Session = Depends(get_db),
-    router: SemanticRouter = Depends(get_semantic_router)
 ):
-    number = normalize_phone_numbers(sender)
+    phone = normalize_phone_numbers(sender)
     
-    session = get_session(number)
 
-    if "user_id" not in session:
-        user = read_user(db=db, phone_number=number)
+    user = read_user(
+            db=db,
+            phone_number=phone
+        )
 
-        if not user.get("exists"):
-            send_message(
-                message="No account found. Please create one on our site.",
-                phone=number
-            )
-            return Response(status_code=200)
-
-        update_session(number, {
-            "user_id": user.get("user_id")
-        })
+    if not user.get("exists"):
+        return Response(
+            status_code=200,
+            content='User does not exist in the DB!'
+        )
         
-    result = await process_message(db=db,user_id=number, message=message, router=router)
+    session = await session_service.get(
+        phone
+    )
+    
+    if not session:
+
+        session = await session_service.create(
+            phone
+        )
+        
+    session_service.add_message(
+        session,
+        "user",
+        message
+    )
+      
+    result = await process_message(db=db, user_id=user.get('user_id'), message=message, session=session)
     print(result)
     # send_message(message=result.get('message'), phone=number)
+    
+    await session_service.save(session)
+    
 
-    return {"message": "All recieved!"}
+    return {"message": "All recieved!", "result": result}
 
