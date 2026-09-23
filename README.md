@@ -1,5 +1,5 @@
 # Flagship Project
-# Project Name -> Base, Forge or Helm
+# Project Name -> Kora
 # AI Name -> Reece
 
 ## Overview
