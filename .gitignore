@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+venv/
+.venv/
+
+# Environment variables
+.env
+
+# Database / runtime state
+*.db
+*.sqlite3
+sessions.json
+
+# ML model artifacts
+*.bin
+*.pt
+
+ai/inventory_model/
+ai/engine/models/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
