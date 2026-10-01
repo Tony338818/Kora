@@ -23,12 +23,10 @@ async def process_message(
     labels, scores = conversation_model.predict(message)
 
     convo_class = labels[0].replace("__label__", "").lower()
-    confidence = scores[0]
 
     intent_model = request.app.state.inventory_classifier
     labels, scores = intent_model.predict(message)
     intent_class = labels[0].replace("__label__", "").lower()
-    confidence = scores[0]
     
     # Casual Conversation Bot
     if convo_class == "casual":

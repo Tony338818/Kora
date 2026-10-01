@@ -10,9 +10,11 @@ from dependency.session import session_service
 
 router = APIRouter(prefix='/conversations')
 
-
-def get_semantic_router(request: Request):
-    return request.app.state.semantic_router
+@router.get('/check')
+def test_check(
+    request: Request
+):
+    return "This is working fine"
 
 @router.post('/')
 async def recieve_user_query(
@@ -21,14 +23,15 @@ async def recieve_user_query(
     message: str = Form(..., alias="Body"),
     db: Session = Depends(get_db),
 ):
-    phone = normalize_phone_numbers(sender)
     
+    phone = normalize_phone_numbers(sender)
 
+    print(phone)
     user = read_user(
             db=db,
             phone_number=phone
         )
-
+    
     if not user.get("exists"):
         return Response(
             status_code=200,
@@ -52,7 +55,6 @@ async def recieve_user_query(
     )
     
     result = await process_message(db=db, user_id=user.get('user_id'), message=message, session=session, request=request)
-    print(result)
     send_message(message=result.get('message'), phone=phone)
     
     await session_service.save(session)
