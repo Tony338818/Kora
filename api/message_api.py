@@ -10,12 +10,6 @@ from dependency.session import session_service
 
 router = APIRouter(prefix='/conversations')
 
-@router.get('/check')
-def test_check(
-    request: Request
-):
-    return "This is working fine"
-
 @router.post('/')
 async def recieve_user_query(
     request: Request,
@@ -26,7 +20,6 @@ async def recieve_user_query(
     
     phone = normalize_phone_numbers(sender)
 
-    print(phone)
     user = read_user(
             db=db,
             phone_number=phone
