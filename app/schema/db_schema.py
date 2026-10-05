@@ -32,26 +32,27 @@ class Users(Base):
 class Products(Base):
     __tablename__ = "products"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer,primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100),nullable=False)
 
-    name = Column(String(100), nullable=False)
-    quantity = Column(Integer, default=0)
+    quantity = Column(Integer, nullable=False, default=0)
+
     cost_price = Column(Float)
     selling_price = Column(Float)
 
-    supplier = Column(String(100))
-    img_url = Column(String(255))
     description = Column(String(255))
+    img_url = Column(String(255))
 
-    buy_date = Column(DateTime)
-    expiry_date = Column(DateTime)
-
-    user = relationship("Users", back_populates="products")
+    user = relationship( "Users", back_populates="products" )
     transaction_items = relationship("TransactionItem", back_populates="product")
-    
+
     __table_args__ = (
-        UniqueConstraint("user_id", "name", name="uq_user_product_name"),
+        UniqueConstraint(
+            "user_id",
+            "name",
+            name="uq_user_product_name"
+        ),
     )
 
 

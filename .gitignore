@@ -10,6 +10,9 @@ venv/
 # Environment variables
 .env
 
+# Pytest
+.pytest_cache/
+
 # Database / runtime state
 *.db
 *.sqlite3
@@ -19,8 +22,8 @@ sessions.json
 *.bin
 *.pt
 
-ai/inventory_model/
-ai/engine/models/
+app/ai/inventory_model/
+app/ai/engine/models/
 
 # Logs
 *.log
