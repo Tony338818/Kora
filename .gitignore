@@ -30,3 +30,6 @@ app/ai/engine/models/
 
 # OS files
 .DS_Store
+
+# Private project documentation
+PROJECT_SPECS.md
