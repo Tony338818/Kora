@@ -16,6 +16,7 @@ class SalesService:
                 user_id=self.user_id,
                 name=product_name.lower()
             )
+            .with_for_update()
             .first()
         )
 
@@ -100,12 +101,6 @@ class SalesService:
                 payment_status=data.get(
                     "payment_status",
                     "paid"
-                ),
-                customer_name=data.get(
-                    "customer_name"
-                ),
-                customer_phone=data.get(
-                    "customer_phone"
                 ),
                 items=transaction_items
             )

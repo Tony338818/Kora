@@ -190,6 +190,26 @@ class InventoryService:
     # Update product details
     # -----------------------------------------------------
 
+    def adjust_stock(self, name: str, delta: int):
+        products = self.db.query(Products).filter_by(
+            user_id=self.user_id, name=self._normalize_name(name)
+        )
+        try:
+            updated = products.filter(Products.quantity + delta >= 0).update(
+                {Products.quantity: Products.quantity + delta},
+                synchronize_session=False,
+            )
+            if not updated:
+                exists = products.first() is not None
+                self.db.rollback()
+                message = "There isn't enough stock." if exists else f"I couldn't find '{name}' in your inventory."
+                return {"success": False, "message": message}
+            self.db.commit()
+            return {"success": True, "message": f"Stock for {name} adjusted by {delta:+d}."}
+        except Exception:
+            self.db.rollback()
+            return {"success": False, "message": "I couldn't adjust stock. Check your inventory before trying again."}
+
     def update_product(self, name: str, data: dict):
 
         product = self.get_product_by_name(name)

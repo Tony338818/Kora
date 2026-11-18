@@ -34,7 +34,8 @@ async def lifespan(app: FastAPI):
         print("Loading spaCy inventory model...")
 
         app.state.inventory_bot = spacy.load(
-            str(INVENTORY_SPACY_MODEL)
+            str(INVENTORY_SPACY_MODEL),
+            enable=["tok2vec", "ner"],
         )
 
         print("✓ Inventory spaCy model loaded")

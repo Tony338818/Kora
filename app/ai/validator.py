@@ -1,300 +1,90 @@
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from schema.product_schema import ProductCreate
-from schema.transactions_schema import TransactionCreate
-
-
-def validator(msg_class: str, intent: str, data: dict):
-    """
-    Validate whether the current task contains enough information
-    to execute the requested action.
-    """
-
-    if msg_class == "inventory":
-        return inventory_intent_validator(intent, data)
-
-    if msg_class == "sales_conversation":
-        return sales_intent_validator(intent, data)
-
-    return {
-        "valid": False,
-        "missing_fields": [],
-        "message": "Invalid request type",
-    }
+from schema.product_schema import ProductCreate, ProductUpdate
+from schema.transactions_schema import TransactionCreate, TransactionItemCreate
 
 
-# ---------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------
-
-def is_missing(value) -> bool:
-    """
-    A value is considered missing only when it is None
-    or an empty string.
-
-    This avoids treating values such as 0 or False as missing.
-    """
-
-    return value is None or (
-        isinstance(value, str) and not value.strip()
-    )
+class ProductReference(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    product_id: int | None = Field(default=None, gt=0)
 
 
-def get_missing_fields_from_validation_error(
-    error: ValidationError
-) -> list[str]:
-    """
-    Extract fields that Pydantic reports as missing.
-    """
-
-    missing_fields = []
-
-    for validation_error in error.errors():
-
-        if validation_error["type"] == "missing":
-            location = validation_error["loc"]
-
-            if location:
-                field = str(location[-1])
-
-                if field not in missing_fields:
-                    missing_fields.append(field)
-
-    return missing_fields
+class TransactionReference(BaseModel):
+    transaction_id: int = Field(gt=0)
 
 
-def parse_validation_error_message(error: ValidationError) -> str:
-    """
-    Convert the first non-missing Pydantic validation error
-    into a readable message.
-    """
-
-    first_error = error.errors()[0]
-
-    location = first_error["loc"]
-    field = str(location[-1]) if location else "value"
-
-    message = first_error["msg"]
-
-    return (
-        f"{field.replace('_', ' ').capitalize()} "
-        f"error: {message}"
-    )
+class SaleItem(TransactionItemCreate):
+    product_name: str = Field(min_length=1, max_length=100)
+    quantity: int = Field(gt=0)
+    unit_price: float = Field(ge=0, allow_inf_nan=False)
 
 
-# ---------------------------------------------------------
-# Inventory
-# ---------------------------------------------------------
+class SaleRequest(TransactionCreate):
+    payment_method: str = Field(min_length=1, max_length=50)
+    payment_status: str = Field(pattern="^(paid|unpaid)$")
+    items: list[SaleItem] = Field(min_length=1)
 
-def inventory_intent_validator(intent: str, data: dict):
 
+class InventoryUpdate(ProductUpdate):
+    model_config = ConfigDict(allow_inf_nan=False)
+
+
+class StockChange(BaseModel):
+    stock_delta: int = Field(ge=-2147483647, le=2147483647)
+
+
+class InventoryCreate(ProductCreate):
+    model_config = ConfigDict(allow_inf_nan=False)
+
+
+REQUIRED_SLOTS = {
+    "add_product": ["name", "quantity", "cost_price", "selling_price"],
+    "update_product": ["name"],
+    "get_product_info": ["name"],
+    "delete_product": ["name"],
+    "view_inventory": [],
+    "record_sale": ["name", "quantity", "unit_price", "payment_method", "payment_status"],
+    "record_purchase": ["name", "quantity", "unit_price", "payment_method", "payment_status"],
+    "get_transaction": ["transaction_id"],
+    "generate_receipt": ["transaction_id"],
+    "list_transactions": [],
+}
+READ_ONLY = {"get_product_info", "view_inventory", "get_transaction", "generate_receipt", "list_transactions"}
+PRODUCT_LOOKUPS = {"update_product", "get_product_info", "delete_product"}
+SALES = {"record_sale", "record_purchase"}
+UPDATE_FIELDS = {"new_name", "quantity", "cost_price", "selling_price", "description", "img_url", "stock_delta"}
+
+
+def validate_operation(intent: str, slots: dict) -> dict:
     if intent == "add_product":
-        try:
-            ProductCreate(**data)
-
-            return {
-                "valid": True,
-                "missing_fields": [],
-            }
-
-        except ValidationError as error:
-
-            missing_fields = (
-                get_missing_fields_from_validation_error(error)
-            )
-
-            if missing_fields:
-                return {
-                    "valid": False,
-                    "missing_fields": missing_fields,
-                }
-
-            # Data exists but one of the values is invalid
-            return {
-                "valid": False,
-                "missing_fields": [],
-                "message": parse_validation_error_message(error),
-            }
-
-    elif intent in [
-        "increment_stock_quantity",
-        "decrement_stock_quantity",
-    ]:
-        missing_fields = []
-
-        if is_missing(data.get("name")):
-            missing_fields.append("name")
-
-        if is_missing(data.get("quantity")):
-            missing_fields.append("quantity")
-
-        return {
-            "valid": not missing_fields,
-            "missing_fields": missing_fields,
-        }
-
-    elif intent == "update_cost_price":
-        missing_fields = []
-
-        if is_missing(data.get("name")):
-            missing_fields.append("name")
-
-        if is_missing(data.get("cost_price")):
-            missing_fields.append("cost_price")
-
-        return {
-            "valid": not missing_fields,
-            "missing_fields": missing_fields,
-        }
-
-    elif intent == "update_selling_price":
-        missing_fields = []
-
-        if is_missing(data.get("name")):
-            missing_fields.append("name")
-
-        if is_missing(data.get("selling_price")):
-            missing_fields.append("selling_price")
-
-        return {
-            "valid": not missing_fields,
-            "missing_fields": missing_fields,
-        }
-
-    elif intent == "get_product_info":
-        missing_fields = []
-
-        if is_missing(data.get("name")):
-            missing_fields.append("name")
-
-        return {
-            "valid": not missing_fields,
-            "missing_fields": missing_fields,
-        }
-
-    elif intent == "change_product_availabilty":
-        missing_fields = []
-
-        if is_missing(data.get("name")):
-            missing_fields.append("name")
-
-        # False is a valid value here
-        if data.get("available") is None:
-            missing_fields.append("available")
-
-        return {
-            "valid": not missing_fields,
-            "missing_fields": missing_fields,
-        }
-
-    elif intent == "delete_product":
-        missing_fields = []
-
-        if is_missing(data.get("name")):
-            missing_fields.append("name")
-
-        return {
-            "valid": not missing_fields,
-            "missing_fields": missing_fields,
-        }
-
-    elif intent == "view_inventory":
-        return {
-            "valid": True,
-            "missing_fields": [],
-        }
-
-    return {
-        "valid": False,
-        "missing_fields": [],
-        "message": "Unknown inventory action",
-    }
+        return InventoryCreate(**slots).model_dump(exclude_unset=True)
+    if intent in PRODUCT_LOOKUPS:
+        target = ProductReference(**slots).model_dump(exclude_none=True)
+        if intent == "update_product":
+            if "stock_delta" in slots:
+                return {**target, **StockChange(**slots).model_dump()}
+            changes = {key: value for key, value in slots.items() if key in UPDATE_FIELDS}
+            if "new_name" in changes:
+                changes["name"] = changes.pop("new_name")
+            target["changes"] = InventoryUpdate(**changes).model_dump(exclude_none=True)
+        return target
+    if intent in SALES:
+        return SaleRequest(
+            transaction_type=intent.removeprefix("record_"),
+            items=[{**slots, "product_name": slots["name"]}],
+            **slots,
+        ).model_dump()
+    if intent in {"get_transaction", "generate_receipt"}:
+        return TransactionReference(**slots).model_dump()
+    return {}
 
 
-# ---------------------------------------------------------
-# Sales
-# ---------------------------------------------------------
-
-def sales_intent_validator(intent: str, data: dict):
-
-    if intent in ["record_sale", "record_purchase"]:
-
-        items = data.get("items")
-
-        if not items:
-            return {
-                "valid": False,
-                "missing_fields": ["items"],
-            }
-
-        # Single item for the alpha
-        item = items[0]
-
-        missing_fields = []
-
-        if is_missing(item.get("product_name")):
-            missing_fields.append("product_name")
-
-        if is_missing(item.get("quantity")):
-            missing_fields.append("quantity")
-
-        if is_missing(item.get("unit_price")):
-            missing_fields.append("unit_price")
-
-        if missing_fields:
-            return {
-                "valid": False,
-                "missing_fields": missing_fields,
-            }
-
-        try:
-            TransactionCreate(**data)
-
-            return {
-                "valid": True,
-                "missing_fields": [],
-            }
-
-        except ValidationError as error:
-
-            missing = get_missing_fields_from_validation_error(
-                error
-            )
-
-            if missing:
-                return {
-                    "valid": False,
-                    "missing_fields": missing,
-                }
-
-            return {
-                "valid": False,
-                "missing_fields": [],
-                "message": parse_validation_error_message(error),
-            }
-
-    elif intent in [
-        "generate_receipt",
-        "get_transaction",
-    ]:
-        missing_fields = []
-
-        if is_missing(data.get("transaction_id")):
-            missing_fields.append("transaction_id")
-
-        return {
-            "valid": not missing_fields,
-            "missing_fields": missing_fields,
-        }
-
-    elif intent == "list_transactions":
-        return {
-            "valid": True,
-            "missing_fields": [],
-        }
-
-    return {
-        "valid": False,
-        "missing_fields": [],
-        "message": "Unknown sales action",
-    }
+def validation_issue(error: ValidationError, intent: str) -> tuple[str, str]:
+    issue = error.errors()[0]
+    field = str(issue["loc"][-1])
+    if field == "product_name":
+        field = "name"
+    elif field == "name" and intent == "update_product":
+        # Update values use a distinct slot from the lookup name.
+        field = "new_name" if error.title == "InventoryUpdate" else "name"
+    return field, issue["msg"]

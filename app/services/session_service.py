@@ -1,112 +1,112 @@
-import json
+
+from collections.abc import Callable
+
+from redis.exceptions import WatchError
+
 from dependency.redis import redis_client
-from schema.conversation_schema import ConversationState
+from schema.conversation_schema import ConversationState, TaskStatus
+
 
 class SessionService:
-    
     PREFIX = "conversation"
-    def _key(self,user_id:str):
 
+    def __init__(self, ttl: int = 1800):
+        self.ttl = ttl
+
+    def _key(self, user_id: str) -> str:
         return f"{self.PREFIX}:{user_id}"
 
-    async def get( self, user_id:str ) -> ConversationState | None:
-        
-        key = self._key(user_id)
+    async def get(
+        self, user_id: str
+    ) -> ConversationState | None:
+        data = await redis_client.get(self._key(user_id))
 
-        data = await redis_client.get(key)
-
-        if not data:
+        if data is None:
             return None
 
-        return ConversationState(
-            **json.loads(data)
+        return ConversationState.model_validate_json(data)
+
+    async def create(self, user_id: str) -> ConversationState:
+        state = ConversationState(user_id=user_id)
+
+        created = await redis_client.set(
+            self._key(user_id),
+            state.model_dump_json(),
+            ex=self.ttl,
+            nx=True,
         )
 
-    async def create(self, user_id:str):
+        if not created:
+            return await self.get(user_id)
 
-        session = ConversationState(
-            user_id=user_id
-        )
+        return state
 
-        await self.save(session)
-
-        return session
-
-
-
-    async def save(
-        self,
-        session:ConversationState
-    ):
-
-        key = self._key(
-            session.user_id
-        )
-
+    async def save(self, state: ConversationState):
         await redis_client.set(
-            key,
-            session.model_dump_json(),
-            ex=1800
-        )
-        
-
-    def add_message(
-        self,
-        session: ConversationState,
-        role:str,
-        content:str
-    ):
-
-
-        if not session:
-            raise
-
-        session.history.append(
-            {
-                "role":role,
-                "content":content
-            }
-        )
-        
-        return session
-
-
-
-    def update_task(
-        self,
-        session: ConversationState,
-        intent:str,
-        slots:dict
-    ):
-
-        if not session:
-            raise
-
-        existing_slots = (
-            session.task.slots
+            self._key(state.user_id),
+            state.model_dump_json(),
+            ex=self.ttl,
         )
 
-        merged_slots = {
-            **existing_slots,
-            **slots
-        }
+    async def delete(self, user_id: str):
+        await redis_client.delete(self._key(user_id))
 
-        session.mode = "task"
-        session.task.intent = intent
-        session.task.status = "collecting"
-        session.task.slots = merged_slots
-
-        return session
-
-
-
-    def clear_task(
+    async def update(
         self,
-        session: ConversationState
+        user_id: str,
+        transition: Callable,
+        retries: int = 5,
+        *,
+        message_id: str | None = None,
     ):
-        
-        if session:
+        key = self._key(user_id)
+        receipt = f"conversation-message:{user_id}:{message_id}" if message_id else None
 
-            session.task.intent = None
-            session.task.status = "idle"
-            session.task.slots = {}
+        for attempt in range(retries):
+            try:
+                async with redis_client.pipeline(
+                    transaction=True
+                ) as pipe:
+                    await pipe.watch(*(key, receipt) if receipt else (key,))
+                    if receipt:
+                        if await pipe.exists(receipt):
+                            return None, None
+
+                    raw = await pipe.get(key)
+
+                    if raw:
+                        state = ConversationState.model_validate_json(
+                            raw
+                        )
+                    else:
+                        state = ConversationState(user_id=user_id)
+
+                    was_executing = state.task.status == TaskStatus.EXECUTING
+                    result = transition(state)
+                    state.version += 1
+                    # Polling a stranded execution must not keep it alive indefinitely.
+                    expiration = (
+                        {"keepttl": True}
+                        if was_executing and state.task.status == TaskStatus.EXECUTING
+                        else {"ex": self.ttl}
+                    )
+
+                    pipe.multi()
+                    pipe.set(
+                        key,
+                        state.model_dump_json(),
+                        **expiration,
+                    )
+                    if receipt:
+                        pipe.set(receipt, "received", ex=86400)
+                    await pipe.execute()
+
+                    return state, result
+
+            except WatchError:
+                if attempt == retries - 1:
+                    raise RuntimeError(
+                        "Session update failed due to concurrent changes"
+                    )
+
+        raise RuntimeError("Session update failed")

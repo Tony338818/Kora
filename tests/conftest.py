@@ -1,15 +1,17 @@
 # tests/conftest.py
 
+import os
+
 import pytest
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from schema.db_schema import Base, Users
-
-
 TEST_DATABASE_URL = "sqlite://"
+os.environ.setdefault("DATABASE_URL", TEST_DATABASE_URL)
+
+from schema.db_schema import Base, Users
 
 
 engine = create_engine(
@@ -43,6 +45,11 @@ def db_session():
 
         # Destroy everything after the test
         Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture
+def db_engine(db_session):
+    return db_session.get_bind()
 
 
 @pytest.fixture
